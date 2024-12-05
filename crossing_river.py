@@ -64,7 +64,7 @@ def decrement_expiration_times(items, num_trips):
             item['value'] = 0
 
 
-# Update stocks times
+# Update stocks
 def updates_stocks(items, trip):
     for item_id in trip:
         item = next(item for item in items if item['id'] == item_id)
@@ -108,7 +108,7 @@ def select_population(population, number):
     total_value = sum(values)
     probabilities = [v / total_value for v in values]
 
-    # Select individuals
+    # Select unique individuals
     selected = []
     candidates = random.choices(population, probabilities, k=number)
     for candidate in candidates:
@@ -117,21 +117,25 @@ def select_population(population, number):
     return selected
 
 
-# Combine trips from both parents
+# Crossover: Single Point Crossover?
 def crossover(parents):
     items = copy.deepcopy(Items)
     parent1, parent2 = random.choices(parents, k=2)
 
-    split1 = random.randint(1, len(parent1) - 1)
-    split2 = random.randint(0, len(parent2) - 2)
+    # Deleting fitness values
+
+    point1 = random.randint(1, len(parent1) - 1)
+    point2 = random.randint(0, len(parent2))
 
     # Create offspring by combining segments from parents
-    child = parent1[:split1] + parent2[split2:]
+    child = parent1[:point1] + parent2[point2:]
 
-    # Limit the trips to 8 and deleting the fitness value of parent
+    # Limit the trips to 9 and deleting the fitness value of parent
     child = child[:8]
+    # Delete parent's fitness
     child.pop()
 
+    # Only keeping the trips that are valid in the sequence
     valid_trips = []
     for trip in child:
         if updates_stocks(items, trip) and check_compatibility(trip[0], trip[1]):
@@ -147,31 +151,22 @@ def crossover(parents):
 
 # Mutate a sample, mp = mutation probability
 def mutate(sample, mp=0.05):
-    items = copy.deepcopy(Items)
-
     # Removing fitness value
     sample.pop()
 
-    old_trips = []
-    new_trips = []
+    items = copy.deepcopy(Items)
+    for trip in sample:
+        updates_stocks(items, trip)
+
     for i in range(len(sample)):
         if random.random() < mp:
-
-            for trip in sample:
-                updates_stocks(items, trip)
-
             # Restore stocks
             for item_id in sample[i]:
                 item = next(item for item in items if item['id'] == item_id)
                 item['stock'] += 1
 
             # Generate a new trip
-            old_trips.append(sample[i])
-            new_trips.append(generate_trip(items))
-
-    # Deleting old_trips and adding new ones
-    sample = [trip for trip in sample if trip not in old_trips]
-    sample.extend(new_trips)
+            sample[i] = generate_trip(items)
 
     # Recalculate fitness value
     sample.append(fitness(sample))
@@ -180,16 +175,16 @@ def mutate(sample, mp=0.05):
 
 
 # Driver function
-def genetic_algorithm(max_generations=10, fitness_threshold=400):
+def genetic_algorithm(max_generations, fitness_threshold, mutation_rate, numb_of_children,
+                      primary_pop_size, num_of_parents, mutation_probability):
     # Creating the primary population
-    primary_population = generate_population(10)
+    primary_population = generate_population(primary_pop_size)
 
     for generation in range(max_generations):
 
-        parents = select_population(primary_population, 5)
+        parents = select_population(primary_population, num_of_parents)
 
         # Creating children
-        numb_of_children = 5
         children = []
         while numb_of_children > len(children):
             child = crossover(parents)
@@ -197,25 +192,24 @@ def genetic_algorithm(max_generations=10, fitness_threshold=400):
                 children.append(child)
 
         # Mutation on children
-        mutation_rate = 0.05
         mutation_list = []
         for sample in children:
             if random.randint(1, 100) > mutation_rate * 100:
                 mutation_list.append(sample)
         children = [sample for sample in children if sample not in mutation_list]
         for sample in mutation_list:
-            children.append(mutate(sample, mutation_rate))
+            children.append(mutate(sample, mutation_probability))
 
         # Add children to population
         primary_population.extend(children)
 
         # Selection for survival
-        primary_population = select_population(primary_population, 10)
+        primary_population = select_population(primary_population, primary_pop_size)
 
         # Check completion criteria
         best_sample = max(primary_population, key=lambda x: x[-1])
         best_fitness = best_sample[-1]
-        print(f"Best Fitness in Generation {generation + 1}: {best_fitness}\n Best sample is {best_sample}")
+#        print(f"Best Fitness in Generation {generation + 1}: {best_fitness}\n Best sample is {best_sample}")
 
         if best_fitness >= fitness_threshold:
             print("Fitness threshold reached. Terminating.")
@@ -226,4 +220,5 @@ def genetic_algorithm(max_generations=10, fitness_threshold=400):
     return {"solution": best_individual, "fitness": best_individual[-1]}
 
 
-genetic_algorithm()
+print(genetic_algorithm(max_generations=50, numb_of_children=75, primary_pop_size=100,
+                  mutation_rate=0.1, num_of_parents=50, mutation_probability=0.2, fitness_threshold=400))
