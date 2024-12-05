@@ -209,7 +209,7 @@ def genetic_algorithm(max_generations, fitness_threshold, mutation_rate, numb_of
         # Check completion criteria
         best_sample = max(primary_population, key=lambda x: x[-1])
         best_fitness = best_sample[-1]
-#        print(f"Best Fitness in Generation {generation + 1}: {best_fitness}\n Best sample is {best_sample}")
+        # print(f"Best Fitness in Generation {generation + 1}: {best_fitness}\n Best sample is {best_sample}")
 
         if best_fitness >= fitness_threshold:
             print("Fitness threshold reached. Terminating.")
@@ -220,5 +220,3 @@ def genetic_algorithm(max_generations, fitness_threshold, mutation_rate, numb_of
     return {"solution": best_individual, "fitness": best_individual[-1]}
 
 
-print(genetic_algorithm(max_generations=50, numb_of_children=75, primary_pop_size=100,
-                  mutation_rate=0.1, num_of_parents=50, mutation_probability=0.2, fitness_threshold=400))
