@@ -128,24 +128,24 @@ def crossover(parents):
     point2 = random.randint(0, len(parent2))
 
     # Create offspring by combining segments from parents
-    child = parent1[:point1] + parent2[point2:]
+    combination = parent1[:point1] + parent2[point2:]
 
-    # Limit the trips to 9 and deleting the fitness value of parent
-    child = child[:8]
+    # Limit the trips to 8 and deleting the fitness value of parent
+    combination = combination[:8]
     # Delete parent's fitness
-    child.pop()
+    combination.pop()
 
     # Only keeping the trips that are valid in the sequence
-    valid_trips = []
-    for trip in child:
+    child = []
+    for trip in combination:
         if updates_stocks(items, trip) and check_compatibility(trip[0], trip[1]):
-            valid_trips.append(trip)
+            child.append(trip)
 
     # Add fitness value
-    if valid_trips:
-        value = fitness(valid_trips)
-        valid_trips.append(value)
-        return valid_trips
+    if child:
+        value = fitness(child)
+        child.append(value)
+        return child
     return None
 
 
@@ -174,11 +174,18 @@ def mutate(sample, mp=0.05):
     return sample
 
 
+# Calculate mr to decrease over generations
+def calculate_mr(generation, mr, max_generations):
+    return max(0.05, mr * (1 - (generation / max_generations)))
+
+
 # Driver function
 def genetic_algorithm(max_generations, fitness_threshold, mutation_rate, numb_of_children,
                       primary_pop_size, num_of_parents, mutation_probability):
     # Creating the primary population
     primary_population = generate_population(primary_pop_size)
+
+    similar_bests = []
 
     for generation in range(max_generations):
 
@@ -194,7 +201,7 @@ def genetic_algorithm(max_generations, fitness_threshold, mutation_rate, numb_of
         # Mutation on children
         mutation_list = []
         for sample in children:
-            if random.randint(1, 100) > mutation_rate * 100:
+            if random.randint(1, 100) > calculate_mr(generation, mutation_rate, max_generations) * 100:
                 mutation_list.append(sample)
         children = [sample for sample in children if sample not in mutation_list]
         for sample in mutation_list:
@@ -203,20 +210,33 @@ def genetic_algorithm(max_generations, fitness_threshold, mutation_rate, numb_of
         # Add children to population
         primary_population.extend(children)
 
-        # Selection for survival
-        primary_population = select_population(primary_population, primary_pop_size)
+        # Selection for survival: Select the top 2 samples to retain
+        elite_samples = sorted(primary_population, key=lambda x: x[-1], reverse=True)[:2]
+        selected_population = select_population(primary_population, primary_pop_size - len(elite_samples))
+        primary_population = selected_population + elite_samples
 
-        # Check completion criteria
+        # Print and store the best sample in each generation if it's the same as last generation
         best_sample = max(primary_population, key=lambda x: x[-1])
         best_fitness = best_sample[-1]
-        # print(f"Best Fitness in Generation {generation + 1}: {best_fitness}\n Best sample is {best_sample}")
+        if similar_bests:
+            if similar_bests[-1] == best_sample:
+                similar_bests.append(best_sample)
+            else:
+                similar_bests.clear()
+        else:
+            similar_bests.append(best_sample)
+        print(f"Best Fitness in Generation {generation + 1}: {best_fitness}\n Best sample is {best_sample}")
 
+        # Check completion criteria
+        # 1. Reaching Threshold
         if best_fitness >= fitness_threshold:
             print("Fitness threshold reached. Terminating.")
+            return {"solution": best_sample, "fitness": best_fitness}
+        # 2. No improvement for 10 consecutive generations
+        elif len(similar_bests) >= 10:
+            print("Solutions have Converged. Terminating.")
             return {"solution": best_sample, "fitness": best_fitness}
 
     # After all generations, return the best solution
     best_individual = max(primary_population, key=lambda x: x[-1])
     return {"solution": best_individual, "fitness": best_individual[-1]}
-
-
