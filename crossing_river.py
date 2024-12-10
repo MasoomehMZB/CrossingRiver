@@ -46,13 +46,14 @@ def check_compatibility(item1_id, item2_id):
 
 # Generate a sample with random trip count
 def generate_sample(items):
-    num_trips = random.randint(1, 9)
+    num_trips = random.randint(1, 15)
     sample = []
     for _ in range(num_trips):
         trip = generate_trip(items)
         if updates_stocks(items, trip):
             sample.append(trip)
     decrement_expiration_times(items, num_trips)
+    sample.extend([[-1, -1] for _ in range(15 - num_trips)])
     return sample
 
 
@@ -61,7 +62,7 @@ def decrement_expiration_times(items, num_trips):
     for item in items:
         item['expiration_time'] -= num_trips
         if item['expiration_time'] <= 0:
-            item['value'] = 0
+            item['stock'] = 0
 
 
 # Update stocks
@@ -122,16 +123,18 @@ def crossover(parents):
     items = copy.deepcopy(Items)
     parent1, parent2 = random.choices(parents, k=2)
 
-    # Deleting fitness values
-
-    point1 = random.randint(1, len(parent1) - 1)
-    point2 = random.randint(0, len(parent2))
+    point1 = 0
+    point2 = 0
+    while point2 == len(parent2) and point1 == 0:
+        point1 = random.randint(0, len(parent1) - 1)
+        point2 = random.randint(0, len(parent2))
 
     # Create offspring by combining segments from parents
     combination = parent1[:point1] + parent2[point2:]
 
     # Limit the trips to 8 and deleting the fitness value of parent
-    combination = combination[:8]
+    combination = combination[:9]
+
     # Delete parent's fitness
     combination.pop()
 
@@ -158,8 +161,10 @@ def mutate(sample, mp=0.05):
     for trip in sample:
         updates_stocks(items, trip)
 
+    # Add Random deletion and insertion
     for i in range(len(sample)):
         if random.random() < mp:
+
             # Restore stocks
             for item_id in sample[i]:
                 item = next(item for item in items if item['id'] == item_id)
@@ -177,6 +182,22 @@ def mutate(sample, mp=0.05):
 # Calculate mr to decrease over generations
 def calculate_mr(generation, mr, max_generations):
     return max(0.05, mr * (1 - (generation / max_generations)))
+
+
+# Detect stagnation
+def detect_stagnation(similar_bests, best_sample):
+    # Store the best sample in each generation if it's the same as last generation
+    if similar_bests:
+        if similar_bests[-1] == best_sample:
+            similar_bests.append(best_sample)
+        else:
+            similar_bests.clear()
+    else:
+        similar_bests.append(best_sample)
+
+    if len(similar_bests) >= 15:
+        return True
+    return False
 
 
 # Driver function
@@ -211,20 +232,13 @@ def genetic_algorithm(max_generations, fitness_threshold, mutation_rate, numb_of
         primary_population.extend(children)
 
         # Selection for survival: Select the top 2 samples to retain
-        elite_samples = sorted(primary_population, key=lambda x: x[-1], reverse=True)[:2]
+        elite_samples = sorted(primary_population, key=lambda x: x[-1], reverse=True)[:1]
         selected_population = select_population(primary_population, primary_pop_size - len(elite_samples))
         primary_population = selected_population + elite_samples
 
-        # Print and store the best sample in each generation if it's the same as last generation
+        # Print and
         best_sample = max(primary_population, key=lambda x: x[-1])
         best_fitness = best_sample[-1]
-        if similar_bests:
-            if similar_bests[-1] == best_sample:
-                similar_bests.append(best_sample)
-            else:
-                similar_bests.clear()
-        else:
-            similar_bests.append(best_sample)
         print(f"Best Fitness in Generation {generation + 1}: {best_fitness}\n Best sample is {best_sample}")
 
         # Check completion criteria
@@ -232,11 +246,15 @@ def genetic_algorithm(max_generations, fitness_threshold, mutation_rate, numb_of
         if best_fitness >= fitness_threshold:
             print("Fitness threshold reached. Terminating.")
             return {"solution": best_sample, "fitness": best_fitness}
-        # 2. No improvement for 10 consecutive generations
-        elif len(similar_bests) >= 10:
+        # 2. No improvement for 15 consecutive generations
+        elif detect_stagnation(similar_bests, best_sample):
             print("Solutions have Converged. Terminating.")
             return {"solution": best_sample, "fitness": best_fitness}
 
     # After all generations, return the best solution
     best_individual = max(primary_population, key=lambda x: x[-1])
     return {"solution": best_individual, "fitness": best_individual[-1]}
+
+
+print(genetic_algorithm(max_generations=50, numb_of_children=200, primary_pop_size=200,
+                        mutation_rate=0.5, num_of_parents=100, mutation_probability=0.2, fitness_threshold=400))
