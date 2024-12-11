@@ -19,164 +19,193 @@ Items = [
 # Generate a trip with 2 items
 def generate_trip(items):
     trip = []
-    # Add the first item if its in stock
-    while 1:
-        item1 = random.choice(items)
-        if item1['stock'] != 0:
-            trip.append(item1['id'])
-            break
+    # Filter items in stock
+    available_items = [item for item in items if item['stock'] > 0]
 
-    # Add the second item if its in stock and compatible
-    while 1:
-        item2 = random.choice(items)
-        if item2['stock'] != 0:
-            if check_compatibility(item1['id'], item2['id']):
-                trip.append(item2['id'])
-                break
+    # Return empty trip if no item is available
+    if not available_items:
+        return trip
+
+    # Select first item
+    item1 = random.choice(available_items)
+    trip = [item1['id']]
+
+    # Select compatible second item
+    available_items = [item for item in available_items if check_compatibility(item1['id'], item['id'])]
+    if available_items:
+        item2 = random.choice(available_items)
+        trip.append(item2['id'])
+
     return trip
 
 
-# Check if the items are compatible in a trip
+# Check if the items in a trip are compatible
 def check_compatibility(item1_id, item2_id):
-    if item2_id in Items[item1_id - 1]['incompatible'] or item1_id in Items[item2_id - 1]['incompatible']:
-        return False
-    else:
-        return True
+    item1 = next(item for item in Items if item['id'] == item1_id)
+    item2 = next(item for item in Items if item['id'] == item2_id)
+    return item2_id not in item1['incompatible'] and item1_id not in item2['incompatible']
 
 
 # Generate a sample with random trip count
 def generate_sample(items):
-    num_trips = random.randint(1, 15)
     sample = []
-    for _ in range(num_trips):
+    total_loss = 0
+
+    # Generate trips for sample
+    for i in range(15):
         trip = generate_trip(items)
-        if updates_stocks(items, trip):
+        if trip and update_stocks(items, trip):
             sample.append(trip)
-    decrement_expiration_times(items, num_trips)
-    sample.extend([[-1, -1] for _ in range(15 - num_trips)])
+        total_loss += calculate_loss(items)
+
+    # Normalize the sample
+    remaining_trips = 15 - len(sample)
+    sample.extend([[] for _ in range(remaining_trips)])
+
+    # Calculate fitness
+    total_loss += sum(calculate_loss(items) for _ in range(remaining_trips))
+    sample.append(total_loss)
+    sample[-1] = fitness(sample, items)
+
     return sample
 
 
-# Update expiration times
-def decrement_expiration_times(items, num_trips):
+# Calculate the loss caused by expiration
+def calculate_loss(items):
+    total_loss = 0
     for item in items:
-        item['expiration_time'] -= num_trips
-        if item['expiration_time'] <= 0:
-            item['stock'] = 0
+        if item['stock'] > 0:
+            item['expiration_time'] -= 1
+            if item['expiration_time'] <= 1:
+                total_loss += item['stock'] * item['value']
+                item['stock'] = 0
+    return total_loss
 
 
-# Update stocks
-def updates_stocks(items, trip):
+# Update stocks and check if a trip's items are in stock
+def update_stocks(items, trip):
     for item_id in trip:
         item = next(item for item in items if item['id'] == item_id)
-        if item['stock'] <= 0:
+        if item['stock'] == 0:
             return False
         item['stock'] -= 1
     return True
 
 
-# Generate the primary population
+# Generate population
 def generate_population(size):
     population = []
     for _ in range(size):
         items = copy.deepcopy(Items)
         sample = generate_sample(items)
-        sample.append(fitness(sample))
         population.append(sample)
     return population
 
 
 # Fitness Function
-def fitness(sample):
-    items = copy.deepcopy(Items)
-    decrement_expiration_times(items, len(sample))
+def fitness(sample, items):
     total_profit = 0
+    total_loss = sample[-1]
 
-    for trip in sample:
+    for trip in sample[:-1]:
+        if not trip:
+            pass
+
+        # Add all the transported items values
         trip_profit = 0
-
         for item_id in trip:
             item = next(item for item in items if item['id'] == item_id)
             trip_profit += item['value']
-
         total_profit += trip_profit
-    return total_profit
+
+    # Add profit and loss
+    return total_profit - total_loss
 
 
 # Selection: Roulette Wheel
-def select_population(population, number):
-    values = [sample[-1] for sample in population]
-    total_value = sum(values)
-    probabilities = [v / total_value for v in values]
+def select_population(population, num):
+    # Calculate fitness values
+    fitness_values = [sample[-1] for sample in population]
+    min_fitness = min(fitness_values)
+    normalized_fitness = [f - min_fitness + 1 for f in fitness_values]
 
-    # Select unique individuals
-    selected = []
-    candidates = random.choices(population, probabilities, k=number)
-    for candidate in candidates:
-        if candidate not in selected:
-            selected.append(candidate)
-    return selected
+    # Calculate probabilities
+    fitness_sum = sum(normalized_fitness)
+    probabilities = [f / fitness_sum for f in normalized_fitness]
+
+    # Select samples
+    selected_unique = []
+    selected = random.choices(population, probabilities, k=num)
+    selected_unique = [sample for sample in selected if sample not in selected_unique]
+
+    return selected_unique
 
 
-# Crossover: Single Point Crossover?
+# Crossover: Uniform Crossover
 def crossover(parents):
-    items = copy.deepcopy(Items)
-    parent1, parent2 = random.choices(parents, k=2)
-
-    point1 = 0
-    point2 = 0
-    while point2 == len(parent2) and point1 == 0:
-        point1 = random.randint(0, len(parent1) - 1)
-        point2 = random.randint(0, len(parent2))
-
-    # Create offspring by combining segments from parents
-    combination = parent1[:point1] + parent2[point2:]
-
-    # Limit the trips to 8 and deleting the fitness value of parent
-    combination = combination[:9]
-
-    # Delete parent's fitness
-    combination.pop()
-
-    # Only keeping the trips that are valid in the sequence
+    parent1, parent2 = random.sample(parents, k=2)
     child = []
-    for trip in combination:
-        if updates_stocks(items, trip) and check_compatibility(trip[0], trip[1]):
-            child.append(trip)
+    # Create offspring by combining segments from parents
+    for i in range(15):
+        if random.randint(0, 1):
+            child.append(parent1[i])
+        else:
+            child.append(parent2[i])
+    # Delete parent's fitness
+    child.pop()
+
+    return validate_sample(child, copy.deepcopy(Items))
+
+
+# Trip validation
+def valid_trip(items, trip):
+    if len(trip) == 2:
+        return update_stocks(items, trip) and check_compatibility(trip[0], trip[1])
+    return update_stocks(items, trip)
+
+
+#  Normalize and validate Sample
+def validate_sample(trips, items):
+    total_loss = 0
+    valid_trips = []
+    # Only keeping the trips that are valid in the sequence
+    for trip in trips:
+        if trip:
+            if valid_trip(items, trip):
+                valid_trips.append(trip)
+                total_loss += calculate_loss(items)
+
+    # Normalize the sample
+    remaining_trips = 15 - len(valid_trips)
+    valid_trips.extend([[] for _ in range(remaining_trips)])
+
+    # Calculate loss
+    total_loss += sum(calculate_loss(items) for _ in range(remaining_trips))
+    valid_trips.append(total_loss)
 
     # Add fitness value
-    if child:
-        value = fitness(child)
-        child.append(value)
-        return child
-    return None
+    valid_trips[-1] = fitness(valid_trips, items)
+
+    return valid_trips
 
 
 # Mutate a sample, mp = mutation probability
 def mutate(sample, mp=0.05):
     # Removing fitness value
     sample.pop()
-
     items = copy.deepcopy(Items)
+    mutated_sample = []
+
+    # Mutate
     for trip in sample:
-        updates_stocks(items, trip)
-
-    # Add Random deletion and insertion
-    for i in range(len(sample)):
         if random.random() < mp:
+            mutated_sample.append(generate_trip(items))
+        else:
+            if trip:
+                mutated_sample.append(trip)
 
-            # Restore stocks
-            for item_id in sample[i]:
-                item = next(item for item in items if item['id'] == item_id)
-                item['stock'] += 1
-
-            # Generate a new trip
-            sample[i] = generate_trip(items)
-
-    # Recalculate fitness value
-    sample.append(fitness(sample))
-
-    return sample
+    # Normalize and Validate
+    return validate_sample(mutated_sample, items)
 
 
 # Calculate mr to decrease over generations
@@ -195,29 +224,29 @@ def detect_stagnation(similar_bests, best_sample):
     else:
         similar_bests.append(best_sample)
 
-    if len(similar_bests) >= 15:
+    if len(similar_bests) >= 20:
         return True
     return False
 
 
 # Driver function
-def genetic_algorithm(max_generations, fitness_threshold, mutation_rate, numb_of_children,
+def genetic_algorithm(max_generations, mutation_rate, numb_of_children,
                       primary_pop_size, num_of_parents, mutation_probability):
     # Creating the primary population
     primary_population = generate_population(primary_pop_size)
 
     similar_bests = []
 
-    for generation in range(max_generations):
+    reset_counter = 10
 
+    for generation in range(max_generations):
         parents = select_population(primary_population, num_of_parents)
 
         # Creating children
         children = []
         while numb_of_children > len(children):
             child = crossover(parents)
-            if child:
-                children.append(child)
+            children.append(child)
 
         # Mutation on children
         mutation_list = []
@@ -231,30 +260,31 @@ def genetic_algorithm(max_generations, fitness_threshold, mutation_rate, numb_of
         # Add children to population
         primary_population.extend(children)
 
-        # Selection for survival: Select the top 2 samples to retain
-        elite_samples = sorted(primary_population, key=lambda x: x[-1], reverse=True)[:1]
+        # Selection for survival: Select the top 3 samples to retain
+        elite_samples = sorted(primary_population, key=lambda x: x[-1], reverse=True)[:3]
         selected_population = select_population(primary_population, primary_pop_size - len(elite_samples))
         primary_population = selected_population + elite_samples
 
-        # Print and
+        # Find the best sample in generation
         best_sample = max(primary_population, key=lambda x: x[-1])
-        best_fitness = best_sample[-1]
-        print(f"Best Fitness in Generation {generation + 1}: {best_fitness}\n Best sample is {best_sample}")
+        # best_fitness = best_sample[-1]
+        # print(f"Best Fitness in Generation {generation + 1}: {best_fitness}\n Best sample is {best_sample}")
 
-        # Check completion criteria
-        # 1. Reaching Threshold
-        if best_fitness >= fitness_threshold:
-            print("Fitness threshold reached. Terminating.")
-            return {"solution": best_sample, "fitness": best_fitness}
-        # 2. No improvement for 15 consecutive generations
-        elif detect_stagnation(similar_bests, best_sample):
-            print("Solutions have Converged. Terminating.")
-            return {"solution": best_sample, "fitness": best_fitness}
+        # Wait for 20 generations before resetting population again
+        if reset_counter < 20:
+            reset_counter += 1
+        else:
+            # Detect stagnation
+            if detect_stagnation(similar_bests, best_sample):
+                print("Solutions have Converged. Resetting population")
+                reset_population = generate_population(len(primary_population) // 2)
+                primary_population = reset_population + elite_samples
+                reset_counter = 0
 
     # After all generations, return the best solution
     best_individual = max(primary_population, key=lambda x: x[-1])
     return {"solution": best_individual, "fitness": best_individual[-1]}
 
 
-print(genetic_algorithm(max_generations=50, numb_of_children=200, primary_pop_size=200,
-                        mutation_rate=0.5, num_of_parents=100, mutation_probability=0.2, fitness_threshold=400))
+print(genetic_algorithm(max_generations=100, numb_of_children=200, primary_pop_size=400,
+                        mutation_rate=0.5, num_of_parents=200, mutation_probability=0.1))
