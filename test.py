@@ -13,37 +13,52 @@ Items = [
 ]
 
 solution =[[6, 6], [9, 9], [4, 9], [7, 3], [7, 7], [7, 7], [5, 8], [5, 5], [], [], [], [], [], [], [], -60]
-u=[[6, 6], [7, 9], [3, 3], [9, 9], [7, 7], [7, 7], [5, 5], [], [], [], [], [], [], [], [], -120]
-r= [[6, 6], [9, 9], [3, 4], [9, 7], [7, 7], [7, 7], [5, 8], [5, 5], [], [], [], [], [], [], [], -60]
-sample = [[6, 6], [9, 9], [3, 3], [7, 9], [7, 7], [7, 7], [5, 8], [5, 5], [], [], [], [], [], [], [], -50]
+e =[[6, 6], [7, 9], [3, 3], [9, 9], [7, 7], [7, 7], [5, 5], [], [], [], [], [], [], [], []]# -120
+sample =[[6, 6], [9, 9], [3, 4], [9, 7], [7, 7], [7, 7], [5, 8], [5, 5], [], [], [], [], [], [], []]# -60
+#[[6, 6], [7, 9], [9, 9], [3, 3], [7, 7], [7, 7], [5, 8], [], [], [], [], [], [], [], []]# -110
+# [[6, 6], [9, 9], [3, 3], [7, 9], [7, 7], [7, 7], [5, 8], [5, 5], [], [], [], [], [], [], []]# fit = -50
+l = [[9, 6], [3, 7], [3, 4], [9, 9], [7, 7], [7, 7], [5, 8], [5, 5], [], [], [], [], [], [], [], -100]
 
+a =[[6, 9], [3, 7], [3, 3], [9, 9], [7, 7], [7, 7], [5, 8], [5, 5], [], [], [], [], [], [], [], -90]
+
+sum = sum(i['value'] * i['stock'] for i in Items)
+print(sum)
+
+for i in l[:-1]:
+    for j in i:
+        item = next(item for item in Items if j == item['id'])
+        sum = sum - item['value'] * 2
+
+print(sum)
 # Initialize variables for profit and loss
-profit = 0
-loss = 0
-
-# Process each trip
-for trip in solution[:-1]:  # Exclude the fitness value
-    # Update expiration times and track transported items
-    transported = []
-    for item_id in trip:
-        item = next(i for i in Items if i['id'] == item_id)
-        if item['stock'] > 0 and item['expiration_time'] > 0:
-            profit += item['value']
-            item['stock'] -= 1
-            transported.append(item_id)
-
-    # Decrease expiration times for all items not transported
-    for item in Items:
-        if item['id'] not in transported:
-            item['expiration_time'] -= 1
-
-# Calculate losses for expired items
-for item in Items:
-    if item['stock'] > 0 and item['expiration_time'] <= 0:
-        loss += item['stock'] * item['value']
-
-# Calculate final fitness
-fitness = profit - loss
-
+# profit = 0
+# loss = 0
+#
+# # Process each trip
+# for trip in solution[:-1]:  # Exclude the fitness value
+#     # Update expiration times and track transported items
+#     transported = []
+#     for item_id in trip:
+#         item = next(i for i in Items if i['id'] == item_id)
+#         if item['stock'] > 0 and item['expiration_time'] > 0:
+#             profit += item['value']
+#             item['stock'] -= 1
+#             transported.append(item_id)
+#
+#     # Decrease expiration times for all items not transported
+#     for item in Items:
+#         if item['id'] not in transported:
+#             item['expiration_time'] -= 1
+#
+# # Calculate losses for expired items
+# for item in Items:
+#     if item['stock'] > 0 and item['expiration_time'] <= 0:
+#         loss += item['stock'] * item['value']
+#
+# # Calculate final fitness
+# fitness = profit - loss
+#  Best sample is [[6, 6], [7, 9], [9, 9], [3, 3], [7, 7], [7, 7], [5, 8], [], [], [], [], [], [], [], [], -110]
+# Best Fitness in Generation 61: -50
+#  Best sample is [[6, 6], [7, 9], [9, 9], [3, 3], [7, 7], [7, 7], [5, 8], [5, 5], [], [], [], [], [], [], [], -50]
 # Return results
-print(profit, loss, fitness)
+# print(profit, loss, fitness)

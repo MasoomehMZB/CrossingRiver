@@ -49,37 +49,31 @@ def check_compatibility(item1_id, item2_id):
 # Generate a sample with random trip count
 def generate_sample(items):
     sample = []
-    total_loss = 0
-
     # Generate trips for sample
     for i in range(15):
         trip = generate_trip(items)
         if trip and update_stocks(items, trip):
             sample.append(trip)
-        total_loss += calculate_loss(items)
+        update_expirations(items)
 
     # Normalize the sample
     remaining_trips = 15 - len(sample)
     sample.extend([[] for _ in range(remaining_trips)])
 
     # Calculate fitness
-    total_loss += sum(calculate_loss(items) for _ in range(remaining_trips))
-    sample.append(total_loss)
-    sample[-1] = fitness(sample, items)
+    sample.append(fitness(sample))
 
     return sample
 
 
-# Calculate the loss caused by expiration
-def calculate_loss(items):
+# Decrease expiration time
+def update_expirations(items):
     total_loss = 0
     for item in items:
         if item['stock'] > 0:
             item['expiration_time'] -= 1
             if item['expiration_time'] <= 1:
-                total_loss += item['stock'] * item['value']
                 item['stock'] = 0
-    return total_loss
 
 
 # Update stocks and check if a trip's items are in stock
@@ -103,23 +97,16 @@ def generate_population(size):
 
 
 # Fitness Function
-def fitness(sample, items):
-    total_profit = 0
-    total_loss = sample[-1]
+def fitness(sample):
+    fitness_value = sum(i['value'] * i['stock'] for i in Items)
 
-    for trip in sample[:-1]:
-        if not trip:
-            pass
+    for trip in sample:
+        if trip:
+            for item_id in trip:
+                item = next(item for item in Items if item_id == item['id'])
+                fitness_value = fitness_value - item['value'] * 2
 
-        # Add all the transported items values
-        trip_profit = 0
-        for item_id in trip:
-            item = next(item for item in items if item['id'] == item_id)
-            trip_profit += item['value']
-        total_profit += trip_profit
-
-    # Add profit and loss
-    return total_profit - total_loss
+    return - fitness_value
 
 
 # Selection: Roulette Wheel
@@ -166,25 +153,20 @@ def valid_trip(items, trip):
 
 #  Normalize and validate Sample
 def validate_sample(trips, items):
-    total_loss = 0
     valid_trips = []
     # Only keeping the trips that are valid in the sequence
     for trip in trips:
         if trip:
             if valid_trip(items, trip):
                 valid_trips.append(trip)
-                total_loss += calculate_loss(items)
+                update_expirations(items)
 
     # Normalize the sample
     remaining_trips = 15 - len(valid_trips)
     valid_trips.extend([[] for _ in range(remaining_trips)])
 
-    # Calculate loss
-    total_loss += sum(calculate_loss(items) for _ in range(remaining_trips))
-    valid_trips.append(total_loss)
-
     # Add fitness value
-    valid_trips[-1] = fitness(valid_trips, items)
+    valid_trips.append(fitness(valid_trips))
 
     return valid_trips
 
@@ -214,7 +196,7 @@ def calculate_mr(generation, mr, max_generations):
 
 
 # Detect stagnation
-def detect_stagnation(similar_bests, best_sample):
+def detect_stagnation(similar_bests, best_sample, threshold=10):
     # Store the best sample in each generation if it's the same as last generation
     if similar_bests:
         if similar_bests[-1] == best_sample:
@@ -224,7 +206,7 @@ def detect_stagnation(similar_bests, best_sample):
     else:
         similar_bests.append(best_sample)
 
-    if len(similar_bests) >= 20:
+    if len(similar_bests) >= threshold:
         return True
     return False
 
@@ -236,8 +218,8 @@ def genetic_algorithm(max_generations, mutation_rate, numb_of_children,
     primary_population = generate_population(primary_pop_size)
 
     similar_bests = []
-
-    reset_counter = 10
+    termination_enable = False
+    first_mr = mutation_rate
 
     for generation in range(max_generations):
         parents = select_population(primary_population, num_of_parents)
@@ -267,24 +249,25 @@ def genetic_algorithm(max_generations, mutation_rate, numb_of_children,
 
         # Find the best sample in generation
         best_sample = max(primary_population, key=lambda x: x[-1])
-        # best_fitness = best_sample[-1]
-        # print(f"Best Fitness in Generation {generation + 1}: {best_fitness}\n Best sample is {best_sample}")
+        best_fitness = best_sample[-1]
+        print(f"Best Fitness in Generation {generation + 1}: {best_fitness}\n Best sample is {best_sample}")
 
-        # Wait for 20 generations before resetting population again
-        if reset_counter < 20:
-            reset_counter += 1
-        else:
-            # Detect stagnation
-            if detect_stagnation(similar_bests, best_sample):
-                print("Solutions have Converged. Resetting population")
-                reset_population = generate_population(len(primary_population) // 2)
-                primary_population = reset_population + elite_samples
-                reset_counter = 0
+        # Detect stagnation
+        if detect_stagnation(similar_bests, best_sample):
+            # Terminate on second conversion
+            if termination_enable:
+                print("Solutions have Converged. Terminating")
+                break
+            else:
+                print("Solutions have Converged. Resetting mutation rate")
+                mutation_rate = first_mr
+                similar_bests.clear()
+                termination_enable = True
 
     # After all generations, return the best solution
     best_individual = max(primary_population, key=lambda x: x[-1])
     return {"solution": best_individual, "fitness": best_individual[-1]}
 
 
-print(genetic_algorithm(max_generations=100, numb_of_children=200, primary_pop_size=400,
-                        mutation_rate=0.5, num_of_parents=200, mutation_probability=0.1))
+print(genetic_algorithm(max_generations=100, numb_of_children=200, primary_pop_size=200,
+                        mutation_rate=0.5, num_of_parents=100, mutation_probability=0.2))
