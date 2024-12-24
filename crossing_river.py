@@ -251,16 +251,18 @@ def genetic_algorithm(max_generations, mutation_rate, numb_of_children,
         primary_population.extend(children)
 
         # Selection for survival: Select the top 3 samples to retain
-        elite_samples = sorted(primary_population, key=lambda x: x[-1], reverse=True)[:3]
-        selected_population = select_population(primary_population, primary_pop_size - len(elite_samples))
-        primary_population = selected_population + elite_samples
+        elite_sample = max(primary_population, key=lambda x: x[-1])
+        primary_population.remove(elite_sample)
+        selected_population = select_population(primary_population, primary_pop_size - 1)
+        selected_population.append(elite_sample)
+        primary_population = selected_population
 
         # Find the best sample in generation
-        best_sample = max(primary_population, key=lambda x: x[-1])
+        best_sample = elite_sample
         print(f"Best Fitness in Generation {generation + 1}: {best_sample[-1]}\n Best sample is {best_sample}")
 
         # Detect stagnation
-        if detect_stagnation(similar_bests, best_sample, 10):
+        if detect_stagnation(similar_bests, best_sample, 15):
             if termination_enable:
                 print("Solutions have Converged. Terminating")
                 break
