@@ -191,12 +191,12 @@ def mutate(sample, mp=0.05):
 
 
 # Calculate mr to decrease over generations
-def calculate_mr(generation, mr, max_generations):
-    return max(0.05, mr * (1 - (generation / max_generations)))
+def calculate_mr(mr_controller, mr, max_generations):
+    return max(0.05, mr * (1 - (mr_controller / max_generations)))
 
 
 # Detect stagnation
-def detect_stagnation(similar_bests, best_sample, threshold=10):
+def detect_stagnation(similar_bests, best_sample, threshold=15):
     # Store the best sample in each generation if it's the same as last generation
     if similar_bests:
         if similar_bests[-1] == best_sample:
@@ -217,11 +217,20 @@ def genetic_algorithm(max_generations, mutation_rate, numb_of_children,
     # Creating the primary population
     primary_population = generate_population(primary_pop_size)
 
+    # Initialize contoller variables
     similar_bests = []
     termination_enable = False
     first_mr = mutation_rate
-
+    terminate = False 
+    mr_controller = 0
+    
     for generation in range(max_generations):
+                
+        if terminate:
+            break
+            
+        print(f"Mutation Rate: {mutation_rate}, first: {first_mr}")
+            
         parents = select_population(primary_population, num_of_parents)
 
         # Creating children
@@ -232,12 +241,15 @@ def genetic_algorithm(max_generations, mutation_rate, numb_of_children,
 
         # Mutation on children
         mutation_list = []
+        mutation_rate = calculate_mr(mr_controller, mutation_rate, max_generations)
+        mr_controller += 1
         for sample in children:
-            if random.randint(1, 100) > calculate_mr(generation, mutation_rate, max_generations) * 100:
+            if random.randint(1, 100) > mutation_rate * 100:
                 mutation_list.append(sample)
         children = [sample for sample in children if sample not in mutation_list]
         for sample in mutation_list:
             children.append(mutate(sample, mutation_probability))
+
 
         # Add children to population
         primary_population.extend(children)
@@ -254,19 +266,20 @@ def genetic_algorithm(max_generations, mutation_rate, numb_of_children,
 
         # Detect stagnation
         if detect_stagnation(similar_bests, best_sample):
-            # Terminate on second conversion
             if termination_enable:
                 print("Solutions have Converged. Terminating")
+                terminate = True
                 break
+               
             else:
                 print("Solutions have Converged. Resetting mutation rate")
                 mutation_rate = first_mr
+                mr_controller = 0
                 similar_bests.clear()
                 termination_enable = True
 
     # After all generations, return the best solution
-    best_individual = max(primary_population, key=lambda x: x[-1])
-    return {"solution": best_individual, "fitness": best_individual[-1]}
+    return {"solution": best_sample, "fitness": best_fitness}
 
 
 print(genetic_algorithm(max_generations=100, numb_of_children=200, primary_pop_size=200,
