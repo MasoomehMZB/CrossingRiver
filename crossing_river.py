@@ -196,7 +196,7 @@ def calculate_mr(mr_controller, mr, max_generations):
 
 
 # Detect stagnation
-def detect_stagnation(similar_bests, best_sample, threshold=15):
+def detect_stagnation(similar_bests, best_sample, threshold=10):
     # Store the best sample in each generation if it's the same as last generation
     if similar_bests:
         if similar_bests[-1] == best_sample:
@@ -215,22 +215,18 @@ def detect_stagnation(similar_bests, best_sample, threshold=15):
 def genetic_algorithm(max_generations, mutation_rate, numb_of_children,
                       primary_pop_size, num_of_parents, mutation_probability):
     # Creating the primary population
+    best_sample = []
     primary_population = generate_population(primary_pop_size)
 
-    # Initialize contoller variables
+    # Initialize controller variables
     similar_bests = []
     termination_enable = False
     first_mr = mutation_rate
-    terminate = False 
     mr_controller = 0
     
     for generation in range(max_generations):
-                
-        if terminate:
-            break
             
-        print(f"Mutation Rate: {mutation_rate}, first: {first_mr}")
-            
+        #print(f"Mutation Rate: {mutation_rate}, first: {first_mr}")
         parents = select_population(primary_population, num_of_parents)
 
         # Creating children
@@ -261,14 +257,12 @@ def genetic_algorithm(max_generations, mutation_rate, numb_of_children,
 
         # Find the best sample in generation
         best_sample = max(primary_population, key=lambda x: x[-1])
-        best_fitness = best_sample[-1]
-        print(f"Best Fitness in Generation {generation + 1}: {best_fitness}\n Best sample is {best_sample}")
+        print(f"Best Fitness in Generation {generation + 1}: {best_sample[-1]}\n Best sample is {best_sample}")
 
         # Detect stagnation
-        if detect_stagnation(similar_bests, best_sample):
+        if detect_stagnation(similar_bests, best_sample, 10):
             if termination_enable:
                 print("Solutions have Converged. Terminating")
-                terminate = True
                 break
                
             else:
@@ -279,8 +273,5 @@ def genetic_algorithm(max_generations, mutation_rate, numb_of_children,
                 termination_enable = True
 
     # After all generations, return the best solution
-    return {"solution": best_sample, "fitness": best_fitness}
+    return {"solution": best_sample, "fitness": best_sample[-1]}
 
-
-print(genetic_algorithm(max_generations=100, numb_of_children=200, primary_pop_size=200,
-                        mutation_rate=0.5, num_of_parents=100, mutation_probability=0.2))
