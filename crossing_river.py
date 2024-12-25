@@ -31,10 +31,13 @@ def generate_trip(items):
     trip = [item1['id']]
 
     # Select compatible second item
-    available_items = [item for item in available_items if check_compatibility(item1['id'], item['id'])]
-    if available_items:
-        item2 = random.choice(available_items)
-        trip.append(item2['id'])
+    if len(available_items) == 1 and available_items[0]['stock'] == 1:
+        return trip
+    else:
+        available_items = [item for item in available_items if check_compatibility(item1['id'], item['id'])]
+        if available_items:
+            item2 = random.choice(available_items)
+            trip.append(item2['id'])
 
     return trip
 
@@ -54,7 +57,7 @@ def generate_sample(items):
         trip = generate_trip(items)
         if trip and update_stocks(items, trip):
             sample.append(trip)
-        update_expirations(items)
+            update_expirations(items)
 
     # Normalize the sample
     remaining_trips = 15 - len(sample)
@@ -68,11 +71,10 @@ def generate_sample(items):
 
 # Decrease expiration time
 def update_expirations(items):
-    total_loss = 0
     for item in items:
         if item['stock'] > 0:
             item['expiration_time'] -= 1
-            if item['expiration_time'] <= 1:
+            if item['expiration_time'] <= 0:
                 item['stock'] = 0
 
 
